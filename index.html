@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CutFrame — Video Editor</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="topbar">
+      <div class="logo">Cut<b>Frame</b></div>
+      <div class="divd"></div>
+      <button class="tb-btn" id="btn-import">＋ Import</button>
+      <button class="tb-btn" id="btn-split" disabled>✂ Split</button>
+      <button class="tb-btn" id="btn-delete" disabled>🗑 Delete</button>
+      <button class="tb-btn" id="btn-crop" disabled>⬜ Crop</button>
+      <input
+        type="file"
+        id="file-input"
+        multiple
+        accept="video/*,audio/*,image/*"
+        style="display: none"
+      />
+      <span id="save-badge">● unsaved</span>
+      <div id="tb-right">
+        <div id="dl-progress" style="display:none; align-items:center; gap:5px; margin-right:8px; font-size:10px; color:var(--text2); font-family:'DM Mono',monospace;">
+          <span id="dl-label">Downloading…</span>
+          <div style="width:40px;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;">
+            <div id="dl-bar" style="width:0%;height:100%;background:var(--accent);"></div>
+          </div>
+        </div>
+        <button
+          class="tb-btn"
+          id="pose-status"
+          title="AI Pose Model Status"
+          onclick="openSettingsModal()"
+        >
+          ⚪ Idle
+        </button>
+        <button class="tb-btn" onclick="openTTSModal()">🎙 AI Voice</button>
+        <button class="tb-btn" id="btn-cc" onclick="toggleCaptions()" title="Toggle caption overlay">CC</button>
+        <button class="tb-btn" onclick="clearProject()">⊗ Clear</button>
+        <button class="tb-btn pri" onclick="openExportModal()">↓ Export</button>
+      </div>
+    </div>
+
+    <div id="main">
+      <div id="media-panel">
+        <div class="ph">Media Bin</div>
+        <div id="drop-zone">
+          <div class="dz-ico">🎞</div>
+          <p><strong>Drop files</strong><br />or click to import</p>
+        </div>
+        <div id="media-list"></div>
+      </div>
+
+      <div id="center">
+        <div id="preview-wrap">
+          <div id="preview-area">
+            <canvas id="preview-canvas" width="854" height="480"></canvas>
+            <canvas id="crop-canvas"></canvas>
+            <div id="no-clip-msg">
+              <div class="ico">🎬</div>
+              Import media &amp; add to timeline
+            </div>
+          </div>
+        </div>
+
+        <div id="transport">
+          <button class="t-btn" onclick="seekStart()">⏮</button>
+          <button class="t-btn" id="btn-play" onclick="togglePlay()">▶</button>
+          <button class="t-btn" onclick="seekEnd()">⏭</button>
+          <div class="divd"></div>
+          <div id="tc">
+            <span id="tc-cur">00:00:00</span>
+            <span class="tot">/ <span id="tc-tot">00:00:00</span></span>
+          </div>
+          <div class="vol-row">
+            <span class="vol-icon">🔊</span>
+            <input
+              type="range"
+              id="vol-slider"
+              min="0"
+              max="1"
+              step="0.02"
+              value="1"
+            />
+            <span id="vol-pct">100%</span>
+          </div>
+        </div>
+
+        <div id="tl-wrap">
+          <div id="tl-toolbar">
+            <button
+              class="tl-btn act"
+              id="tool-select"
+              onclick="setTool('select')"
+            >
+              ▸ Select
+            </button>
+            <button class="tl-btn" id="tool-razor" onclick="setTool('razor')">
+              ✂ Razor
+            </button>
+            <div class="tl-sep"></div>
+            <button class="tl-btn" onclick="zoomTl(-1)">－</button>
+            <span id="zoom-val">1×</span>
+            <button class="tl-btn" onclick="zoomTl(1)">＋</button>
+            <div class="tl-sep"></div>
+            <button class="tl-btn" onclick="addTrack()">＋ Track</button>
+            <span id="tl-hint">Drag media from bin → tracks</span>
+          </div>
+          <div id="tl-outer">
+            <div id="tl-inner">
+              <canvas id="tl-ruler" height="22"></canvas>
+              <div id="tl-tracks">
+                <div id="tl-empty-msg">Add tracks then drag media here</div>
+              </div>
+              <div id="playhead"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="props-panel">
+        <div class="ph">Properties</div>
+        <div id="props-body">
+          <div class="no-sel">Select a clip to edit properties</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="statusbar">
+      <div class="sb">Clips: <b id="sb-clips">0</b></div>
+      <div class="sb">Duration: <b id="sb-dur">0:00</b></div>
+      <div class="sb">Tracks: <b id="sb-tracks">0</b></div>
+      <div class="sb">Tool: <b id="sb-tool">Select</b></div>
+      <div class="sb" style="margin-left: auto">
+        Storage: <b id="sb-stor">—</b>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <div id="export-modal">
+      <div class="modal">
+        <h3>Export</h3>
+        <div class="ml">Format</div>
+        <select class="ms" id="exp-fmt">
+          <option value="webm">WebM (VP8)</option>
+          <option value="mp4">MP4 (H.264, if supported)</option>
+          <option value="mov">MOV (if supported)</option>
+          <option value="png">PNG frames</option>
+        </select>
+        <div class="ml">Resolution</div>
+        <select class="ms" id="exp-res">
+          <option value="1080x1920">1080×1920 (9:16 Reel/Shorts)</option>
+          <option value="2160x3840">2160×3840 (9:16 4K)</option>
+          <option value="854x480">854×480</option>
+          <option value="1280x720">1280×720</option>
+          <option value="1920x1080">1920×1080</option>
+        </select>
+        <div class="ml">Frame Fit</div>
+        <select class="ms" id="exp-fit">
+          <option value="cover">Fill frame (cover, no bars)</option>
+          <option value="contain">Keep full frame (contain, bars)</option>
+        </select>
+        <div id="exp-prog"><div id="exp-bar"></div></div>
+        <div id="exp-status"></div>
+        <div class="mbns">
+          <button class="tb-btn" onclick="closeExportModal()">Cancel</button>
+          <button class="tb-btn pri" id="btn-do-exp" onclick="doExport()">
+            Export
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="settings-modal">
+      <div class="modal">
+        <h3>Settings</h3>
+        <div class="settings-section">
+          <div class="settings-title">AI Pose Model</div>
+          <div id="pose-status-detail" class="settings-status">⚪ Idle</div>
+          <p style="font-size: 9px; color: var(--text2); margin: 8px 0">
+            The AI pose detection model is cached locally for faster loading and
+            offline usage.
+          </p>
+          <div style="display: flex; gap: 6px; margin-top: 12px">
+            <button
+              class="tb-btn"
+              style="flex: 1; font-size: 9px"
+              onclick="refreshPoseModel()"
+            >
+              🔄 Refresh Model
+            </button>
+            <button
+              class="tb-btn"
+              style="flex: 1; font-size: 9px"
+              onclick="clearPoseCache()"
+            >
+              🗑 Clear Cache
+            </button>
+          </div>
+        </div>
+        <div style="border-top: 1px solid var(--bg2); margin: 12px 0"></div>
+        <button
+          class="tb-btn"
+          style="width: 100%"
+          onclick="closeSettingsModal()"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="tts-modal">
+      <div class="modal">
+        <h3>AI Voiceover</h3>
+        <div class="ml">Voice (for preview)</div>
+        <select class="ms" id="tts-voice" style="margin-bottom: 12px;"></select>
+        <div class="ml">Text to speak</div>
+        <textarea id="tts-text" class="ms" rows="4" placeholder="Enter text here..."></textarea>
+        <div id="tts-status" style="margin-top: 8px; font-size: 10px; color: var(--accent2); min-height: 14px;"></div>
+        <div class="mbns" style="margin-top: 12px;">
+          <button class="tb-btn" onclick="closeTTSModal()">Cancel</button>
+          <button class="tb-btn" onclick="previewTTS()">▶ Preview</button>
+          <button class="tb-btn pri" onclick="generateTTS()">Add to Timeline</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="onboarding-modal">
+      <div class="modal" style="width:360px;">
+        <h3 style="margin-bottom:6px">Welcome to CutFrame AI</h3>
+        <p style="font-size: 11.5px; color: var(--text2); margin-bottom: 16px; line-height: 1.5;">
+          CutFrame works completely offline! Select the AI models you want to download now to enable offline AI features.
+        </p>
+        
+        <div style="background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); margin-bottom:8px;">
+          <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="dl-bg" checked style="margin-top:2px;">
+            <div style="flex:1;">
+              <div style="font-size:11.5px; font-weight:600; color:var(--text);">AI Background Remover</div>
+              <div style="font-size:9.5px; color:var(--text3); margin-top:3px;">~45MB • Required for Magic Matting</div>
+            </div>
+          </label>
+        </div>
+        
+        <div style="background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); margin-bottom:8px;">
+          <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="dl-pose" checked style="margin-top:2px;">
+            <div style="flex:1;">
+              <div style="font-size:11.5px; font-weight:600; color:var(--text);">AI Pose Tracking</div>
+              <div style="font-size:9.5px; color:var(--text3); margin-top:3px;">~10MB • Required for Auto-Center</div>
+            </div>
+          </label>
+        </div>
+        
+        <div style="background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); margin-bottom:8px;">
+          <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="dl-tts" checked style="margin-top:2px;">
+            <div style="flex:1;">
+              <div style="font-size:11.5px; font-weight:600; color:var(--text);">AI Voice Engine</div>
+              <div style="font-size:9.5px; color:var(--text3); margin-top:3px;">~150MB • Offline TTS for exportable voiceovers</div>
+            </div>
+          </label>
+        </div>
+        
+        <div style="background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); margin-bottom:16px;">
+          <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="dl-whisper" style="margin-top:2px;">
+            <div style="flex:1;">
+              <div style="font-size:11.5px; font-weight:600; color:var(--text);">AI Auto-Captions</div>
+              <div style="font-size:9.5px; color:var(--text3); margin-top:3px;">~75MB • Whisper speech-to-text for subtitles</div>
+            </div>
+          </label>
+        </div>
+        
+        <div class="mbns" style="margin-top: 16px;">
+          <button class="tb-btn" onclick="skipOnboarding()">Skip for now</button>
+          <button class="tb-btn pri" onclick="startOnboardingDownloads()">Download Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
