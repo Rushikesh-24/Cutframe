@@ -1336,8 +1336,8 @@ async function autoCenterPersonInFrame(clipId) {
 
   // Create preview canvas for showing detection
   const previewCanvas = document.createElement("canvas");
-  previewCanvas.width = 400;
-  previewCanvas.height = 300;
+  previewCanvas.width = 450;
+  previewCanvas.height = 800;
 
   try {
     const detector = await ensurePoseDetector();
